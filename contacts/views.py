@@ -3,6 +3,9 @@ from django.contrib import messages
 from django.core.mail import send_mail
 from .models import Contact
 from .tasks import sleeps
+from django.views.decorators.csrf import csrf_exempt
+import json
+from django.http import HttpResponse
 
 
 def contact(request):
@@ -36,3 +39,26 @@ def contact(request):
         sleeps.delay(5)
         messages.success(request, 'Your request has been submitted, a realtor will get back to you soon ')
         return redirect('/listings/'+listing_id)
+@csrf_exempt
+def contactApi(request):
+    if request.method == 'POST':
+        payload = json.loads(request.body)
+        listing_id = payload['listing_id']
+        listing = payload['listing']
+        name = payload['name']
+        email = payload['email']
+        phone = payload['phone']
+        message = payload['message']
+        user_id = payload['user_id']
+        realtor_email = payload['realtor_email']
+# check if uerer already has made inquiry 
+        if not user_id is None:
+            has_contacted = Contact.objects.all().filter(listing_id=listing_id, user_id=user_id)
+            if has_contacted:
+                response = json.dumps([{'fail':'you have already made an inquiry for this listing'}])
+                return HttpResponse(response, content_type = 'text/json')
+
+        contact = Contact(listing_id=listing_id, listing=listing, name=name, email=email, phone=phone, message=message, user_id=user_id)
+        contact.save()
+        response = json.dumps([{'success':'will contact you soon'}])
+        return HttpResponse(response, content_type = 'text/json')
